@@ -1,0 +1,6 @@
+01-sctp-kernel/kernel-payload.tar.zst
+02-cn5g/cn5g-payload.tar.zst
+02-cn5g/packages/
+config.env
+*.tar.zst
+*.tar.zst.sha256
