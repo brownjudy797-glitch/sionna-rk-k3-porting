@@ -61,11 +61,87 @@ ss -lnp --sctp
 - B210 实时空口仍受 K3 实时性和 UHD overflow 影响，这与 CN5G 功能移植是否成功是两个独立验收项；
 - 若升级系统 glibc、OpenSSL、MariaDB 或核心网源码，需要重新执行 `ldd`、SCTP/N4/N2 和 PDU Session 回归。
 
-## 7. 在另一块 K3 上离线安装
+## 7. 在线安装（推荐）
+
+目标 K3 能访问 GitHub 时，优先使用本节。安装程序会从公开 Release 下载经过校验的 RISC-V 安装包，不需要复制整个离线目录。
+
+### 7.1 下载安装仓库
+
+```bash
+cd "$HOME"
+git clone https://github.com/brownjudy797-glitch/sionna-rk-k3-porting.git
+cd sionna-rk-k3-porting
+```
+
+如果此前已经下载过，只需更新：
+
+```bash
+cd "$HOME/sionna-rk-k3-porting"
+git pull --ff-only
+```
+
+### 7.2 检查平台和 SCTP
+
+```bash
+./install-online.sh check
+```
+
+若结果显示 `SCTP is already available; no kernel change is needed.`，不要重复安装内核，直接进入下一步。
+
+只有 SCTP 不可用时才执行：
+
+```bash
+./install-online.sh kernel
+sudo reboot
+```
+
+重启后重新进入仓库并检查：
+
+```bash
+cd "$HOME/sionna-rk-k3-porting"
+./install-online.sh check
+```
+
+### 7.3 在线安装 CN5G
+
+使用自动检测到的本机网络参数安装：
+
+```bash
+./install-online.sh cn5g
+```
+
+需要明确指定地址和出口网卡时，先生成本机配置：
+
+```bash
+cp 02-cn5g/config.env.example config.env
+nano config.env
+./install-online.sh cn5g ./config.env
+```
+
+公开安装包不包含实验室 UE 的 IMSI、K、OPc 等鉴权数据。真实 UE 的用户信息必须在本机单独配置，不要提交到公开仓库。
+
+### 7.4 安装 B200/B210 启动脚本
+
+确认 `$HOME/sionna-rk` 中的 OAI RAN 已经编译完成后执行：
+
+```bash
+cd "$HOME/sionna-rk-k3-porting"
+./install-online.sh b200 "$HOME/sionna-rk"
+```
+
+脚本会安装到 `$HOME/sionna-rk/scripts/run-k3-b200.sh`。完整启动方法见第 9 节。
+
+### 7.5 下载量说明
+
+- K3 已支持 SCTP 时，只需下载约 128 MB 的 CN5G 包；
+- 只有缺少 SCTP 时，才额外下载约 875 MB 的内核包；
+- 在线安装仍会核对 Release 中发布的 SHA-256，校验失败会停止安装。
+
+## 8. 在另一块 K3 上离线安装
 
 以下命令全部在目标 K3 上执行。不要跳过校验和 SCTP 重启验收。
 
-### 7.1 找到 USB 存储设备
+### 8.1 找到 USB 存储设备
 
 插入存有安装包的 USB 设备，然后执行：
 
@@ -94,7 +170,7 @@ cd /run/media/ubuntu/9EF6-0F3A/sionna-rk-k3-offline-kit
 ls -lh
 ```
 
-### 7.2 校验并复制到目标 K3
+### 8.2 校验并复制到目标 K3
 
 先校验 USB 上的归档：
 
@@ -120,7 +196,7 @@ sha256sum -c sionna-rk-k3-offline-kit-20260911.tar.zst.sha256
 
 第二次校验也必须显示 `OK`。
 
-### 7.3 解压并执行安装前检查
+### 8.3 解压并执行安装前检查
 
 ```bash
 cd "$HOME/k3-offline-install"
@@ -138,7 +214,7 @@ sha256sum -c checksums.sha256
 - 所有内部文件校验显示 `OK`；
 - `Preflight: PASS`。
 
-### 7.4 安装 SCTP 内核
+### 8.4 安装 SCTP 内核
 
 ```bash
 cd "$HOME/k3-offline-install/sionna-rk-k3-offline-kit"
@@ -162,7 +238,7 @@ modinfo sctp
 
 只有这三项通过后才能安装 CN5G。
 
-### 7.5 配置目标 K3 的网络参数
+### 8.5 配置目标 K3 的网络参数
 
 自动检测当前默认网卡和 IPv4 时，可以直接进入下一节。需要显式配置时执行：
 
@@ -190,7 +266,7 @@ WAN_IF=wlP4p1s0
 
 不要直接照抄示例，应使用目标 K3 的实际值。`UPF_N3_IP`、`GNB_N3_IP` 和 UE 地址段在同机实验且无地址冲突时可以保持默认。
 
-### 7.6 离线安装 CN5G
+### 8.6 离线安装 CN5G
 
 使用自动检测网络参数：
 
@@ -214,7 +290,7 @@ sudo ./install.sh cn5g ./config.env
 4. 启用 MariaDB；
 5. 创建 `oai_db`、数据库账户和 UE 数据表。
 
-### 7.7 启动核心网
+### 8.7 启动核心网
 
 ```bash
 sudo /opt/sionna-rk-k3/cn5g/scripts/start-cn5g.sh
@@ -252,7 +328,7 @@ sudo tail -100 /var/lib/sionna-rk-k3/cn5g/logs/amf.log
 - `N4: associated`；
 - `N2/SCTP 38412: listening`。
 
-### 7.8 停止核心网
+### 8.8 停止核心网
 
 ```bash
 sudo /opt/sionna-rk-k3/cn5g/scripts/stop-cn5g.sh
@@ -267,7 +343,7 @@ pgrep -a smf || true
 pgrep -a upf || true
 ```
 
-### 7.9 SCTP 内核回退
+### 8.9 SCTP 内核回退
 
 如果新内核能够进入系统，但需要恢复原厂引导：
 
@@ -289,7 +365,7 @@ Ubuntu, with Linux 6.18.3-7-spacemit-generic
 uname -r
 ```
 
-### 7.10 常见错误
+### 8.10 常见错误
 
 若提示校验失败：
 
@@ -323,9 +399,9 @@ sudo tail -100 /var/lib/sionna-rk-k3/cn5g/logs/upf.log
 ip address show cn5g-upf
 ```
 
-## 8. 启动 gNB、CN5G 并连接 UE
+## 9. 启动 gNB、CN5G 并连接 UE
 
-本节要求目标 K3 除了完成第 7 节的内核和 CN5G 安装外，还已经安装并编译 Sionna-RK 中的 OAI RAN。确认下面两个程序存在：
+本节要求目标 K3 已经按第 7 节在线安装或按第 8 节离线安装 CN5G，并且已经安装、编译 Sionna-RK 中的 OAI RAN。确认下面两个程序存在：
 
 ```bash
 cd "$HOME/sionna-rk"
@@ -337,7 +413,7 @@ test -x ext/openairinterface5g/cmake_targets/ran_build/build/nr-uesoftmodem \
 
 离线包中的 `02-cn5g` 只负责核心网，不包含 OAI RAN 编译产物。若显示 `MISSING`，应先完成 OAI RISC-V 移植和编译，不能直接执行下面的启动命令。
 
-### 8.1 两种 UE 接入方式
+### 9.1 两种 UE 接入方式
 
 本项目支持两种不同的验证方式：
 
@@ -346,7 +422,7 @@ test -x ext/openairinterface5g/cmake_targets/ran_build/build/nr-uesoftmodem \
 
 初次部署应先完成 RFsim 软件 UE 验证，再尝试 B210 和真实 UE。
 
-### 8.2 RFsim：一键启动核心网、gNB 和软件 UE
+### 9.2 RFsim：一键启动核心网、gNB 和软件 UE
 
 先停止可能遗留的进程：
 
@@ -460,7 +536,7 @@ pgrep -a upf || true
 ip netns list
 ```
 
-### 8.3 RFsim 启动失败时检查
+### 9.3 RFsim 启动失败时检查
 
 如果提示 gNB 没有完成 NG Setup：
 
@@ -486,13 +562,13 @@ cd "$HOME/sionna-rk"
 sudo ./scripts/stop-full-cn5g-k3.sh || true
 ```
 
-### 8.4 B210：启动核心网和真实射频 gNB
+### 9.4 B210：启动核心网和真实射频 gNB
 
 真实射频测试应在屏蔽箱或符合当地无线电管理要求的实验环境中进行，并使用合适的衰减器。不要在未经许可的频段直接辐射发射。
 
 该启动器不属于 Sionna-RK 官方仓库，属于 **【K3 移植新增】**。可以直接在目标 K3 上生成，不需要从作者电脑复制脚本。
 
-#### 8.4.1 准备 B200/B210 运行脚本
+#### 9.4.1 准备 B200/B210 运行脚本
 
 运行脚本属于 **【K3 移植新增】**，不属于 Sionna-RK 官方仓库。请选择一种方式：
 
@@ -501,7 +577,7 @@ sudo ./scripts/stop-full-cn5g-k3.sh || true
 
 正文不再放置完整脚本，后续修改或核对脚本时统一查看附录 A。
 
-#### 8.4.2 使用离线包安装脚本
+#### 9.4.2 使用离线包安装脚本
 
 如果正在使用本离线包，也可以由安装程序复制同一份脚本：
 
@@ -598,7 +674,7 @@ associated AMF 1
 
 这只说明 gNB 已通过 N2 接入核心网，不代表真实 UE 已经注册。
 
-### 8.5 真实 UE/手机的 USIM 条件
+### 9.5 真实 UE/手机的 USIM 条件
 
 普通运营商 SIM 不能直接注册到本实验核心网。真实 UE 必须满足：
 
@@ -624,7 +700,7 @@ sudo mariadb oai_db -e 'SELECT imsi,mcc,mnc FROM users;'
 
 不要把测试 USIM 的 K、OPc 或数据库口令上传到公共平台。写入实体 USIM 时，应在受控环境中完成。
 
-### 8.6 观察真实 UE 注册过程
+### 9.6 观察真实 UE 注册过程
 
 另开一个终端观察 AMF：
 
@@ -660,7 +736,7 @@ RRC 接入
 → PDU_SESSION_ACTIVE
 ```
 
-### 8.7 停止 B210 gNB 和核心网
+### 9.7 停止 B210 gNB 和核心网
 
 如果使用 `run-k3-b200.sh` 启动：
 
@@ -686,7 +762,7 @@ pgrep -a smf || true
 pgrep -a upf || true
 ```
 
-### 8.8 当前 B210 限制
+### 9.8 当前 B210 限制
 
 当前 K3 已验证：B210 能被 UHD 识别、gNB 能初始化、核心网能启动、N2 NG Setup 能完成。但射频流仍可能出现 UHD `ERROR_CODE_OVERFLOW`。因此现阶段可以声明“B210 gNB 与 CN5G 框架已打通”，在 overflow 和实时性问题解决、真实 UE 完成注册及 PDU Session 前，不能声明真实空口端到端已经验收成功。
 
