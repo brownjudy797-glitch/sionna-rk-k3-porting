@@ -12,7 +12,12 @@ download() {
   mkdir -p "$(dirname "$dest")"
   curl -fL --retry 3 --connect-timeout 20 "$RELEASE_BASE/$name" -o "$dest"
   curl -fL --retry 3 --connect-timeout 20 "$RELEASE_BASE/$name.sha256" -o "$dest.sha256"
-  (cd "$(dirname "$dest")" && sha256sum -c "$(basename "$dest").sha256")
+  local expected actual
+  expected="$(awk 'NR==1 {print $1}' "$dest.sha256")"
+  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || die "SHA-256 文件格式错误：$name.sha256"
+  actual="$(sha256sum "$dest" | awk '{print $1}')"
+  [[ "$actual" == "$expected" ]] || die "SHA-256 校验失败：$name"
+  echo "$name: OK"
 }
 
 [[ "$(uname -m)" == riscv64 ]] || die "仅支持 riscv64 K3"
