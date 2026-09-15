@@ -8,8 +8,14 @@ BACKUP="/boot/k3-sctp-backup-$(date +%Y%m%d-%H%M%S)"
 
 [[ "$(uname -m)" == riscv64 ]] || { echo "ERROR: 架构不是 riscv64" >&2; exit 1; }
 [[ -s "$ROOT/kernel-payload.tar.zst" ]] || { echo "ERROR: 缺少 kernel-payload.tar.zst" >&2; exit 1; }
-tar --zstd -tf "$ROOT/kernel-payload.tar.zst" | grep -q "^boot/vmlinuz-$KVER$" \
-  || { echo "ERROR: 内核载荷不完整" >&2; exit 1; }
+PAYLOAD_LIST="$(mktemp)"
+trap 'rm -f "$PAYLOAD_LIST"' EXIT
+tar --zstd -tf "$ROOT/kernel-payload.tar.zst" > "$PAYLOAD_LIST" \
+  || { echo "ERROR: 无法读取内核载荷，文件可能损坏或不完整" >&2; exit 1; }
+grep -Fxq "boot/vmlinuz-$KVER" "$PAYLOAD_LIST" \
+  || { echo "ERROR: 内核载荷缺少 boot/vmlinuz-$KVER" >&2; exit 1; }
+grep -Fq "lib/modules/$KVER/" "$PAYLOAD_LIST" \
+  || { echo "ERROR: 内核载荷缺少 lib/modules/$KVER/" >&2; exit 1; }
 
 mkdir -p "$BACKUP"
 cp -a /boot/boot.scr /boot/grub/grub.cfg "$BACKUP/" 2>/dev/null || true
