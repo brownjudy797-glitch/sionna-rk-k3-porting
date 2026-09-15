@@ -77,8 +77,11 @@ cd sionna-rk-k3-porting
 
 ```bash
 cd "$HOME/sionna-rk-k3-porting"
-git pull --ff-only
+git pull --ff-only origin main
+git rev-parse --short HEAD
 ```
+
+内核载荷校验误报修复包含在提交 `caa1be3` 及后续版本中。若输出的提交早于该版本，应先完成更新再安装。
 
 ### 7.2 检查平台和 SCTP
 
@@ -94,6 +97,35 @@ git pull --ff-only
 ./install-online.sh kernel
 sudo reboot
 ```
+
+安装程序会先校验 Release 的 SHA-256，再完整读取压缩包目录，并确认以下两部分同时存在：
+
+```text
+boot/vmlinuz-6.18.3-k3-sctp+
+lib/modules/6.18.3-k3-sctp+/
+```
+
+若旧版脚本显示 `ERROR: 内核载荷不完整`，不要删除载荷或重启。先确认脚本是否已经更新：
+
+```bash
+grep -n PAYLOAD_LIST 01-sctp-kernel/install-sctp-kernel.sh
+```
+
+没有输出表示仍是旧脚本，执行：
+
+```bash
+git pull --ff-only origin main
+```
+
+需要人工复核已下载载荷时执行：
+
+```bash
+tar --zstd -tf 01-sctp-kernel/kernel-payload.tar.zst > /tmp/k3-kernel-files.txt
+grep -Fx 'boot/vmlinuz-6.18.3-k3-sctp+' /tmp/k3-kernel-files.txt
+grep -F 'lib/modules/6.18.3-k3-sctp+/' /tmp/k3-kernel-files.txt | head
+```
+
+两条检查都有输出才表示内核映像和模块树均存在。修正版脚本避免了旧版 `pipefail` 与 `grep -q` 组合造成的误报。
 
 重启后重新进入仓库并检查：
 
